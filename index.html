@@ -1970,7 +1970,7 @@ function renderLive() {
     </div>
 
     <div class="over-balls">
-      ${inn.currentOver.map(b => {
+      ${(inn.currentOver || []).map(b => {
         let cls = 'runs';
         if (b.type === 'wicket') cls = 'wicket';
         else if (b.type === 'wide' || b.type === 'noball') cls = 'wide';
@@ -2056,6 +2056,12 @@ function openAddPlayerMidMatch() {
   if (!requireScorer('add players mid-match')) return;
   if (!match || match.status !== 'live') return;
   const inn = getCurrentInnings();
+  if (!inn) return;
+  
+  inn.currentOver ||= [];
+  inn.fallOfWickets ||= [];
+  inn.batting ||= [];
+  inn.bowling ||= [];
   const battingNames = inn.batting.map(b => b.name);
   const bowlingNames = inn.bowling.map(b => b.name);
   const available = players.filter(p => !battingNames.includes(p) && !bowlingNames.includes(p));
