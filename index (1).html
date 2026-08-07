@@ -394,6 +394,14 @@ window.firebaseOnValue = onValue;
    NO FIXED WICKET-KEEPER
    - Any player can keep or bowl; no WK role is stored or required
    ============================================================ */
+async function saveMatchToCloud() {
+  if (!match || !window.firebaseDb) return;
+
+  await firebaseSet(
+    firebaseRef(firebaseDb, "liveMatch"),
+    match
+  );
+}
 
 const DEFAULT_PLAYERS = [
   "Anjaneya","Balakrishnan","Muthu","Hari","Ganesha","Sathish",
@@ -412,6 +420,8 @@ function save() {
   localStorage.setItem('tejas_players', JSON.stringify(players));
   localStorage.setItem('tejas_match', JSON.stringify(match));
   localStorage.setItem('tejas_history', JSON.stringify(history));
+
+  saveMatchToCloud();
 }
 function toast(msg, ms=2400) {
   const t = document.getElementById('toast');
