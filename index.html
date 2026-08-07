@@ -2580,7 +2580,9 @@ function startLiveSync() {
 }
 
 window.addEventListener('load', () => {
-  setTimeout(startLiveSync, 1000);
+  if (!isScorer()) {
+    setTimeout(startLiveSync, 1000);
+  }
 });
   
 </script>
