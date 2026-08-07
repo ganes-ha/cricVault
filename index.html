@@ -2567,13 +2567,34 @@ function startLiveSync() {
   firebaseOnValue(
     firebaseRef(firebaseDb, "liveMatch"),
     (snapshot) => {
+
       const data = snapshot.val();
 
-      if (data) {
-        match = data;
+      if (!data) return;
 
-        try { renderLive(); } catch(e) {}
-        try { renderScorecard(); } catch(e) {}
+      match = data;
+
+      // Firebase may remove empty arrays
+      if (match.inn1) {
+        match.inn1.currentOver ||= [];
+        match.inn1.fallOfWickets ||= [];
+        match.inn1.batting ||= [];
+        match.inn1.bowling ||= [];
+      }
+
+      if (match.inn2) {
+        match.inn2.currentOver ||= [];
+        match.inn2.fallOfWickets ||= [];
+        match.inn2.batting ||= [];
+        match.inn2.bowling ||= [];
+      }
+
+      try { renderLive(); } catch(e) {
+        console.error("renderLive", e);
+      }
+
+      try { renderScorecard(); } catch(e) {
+        console.error("renderScorecard", e);
       }
     }
   );
