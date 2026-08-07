@@ -2561,6 +2561,28 @@ if (currentUser) {
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('main-app').style.display = 'none';
 }
+function startLiveSync() {
+  if (!window.firebaseDb) return;
+
+  firebaseOnValue(
+    firebaseRef(firebaseDb, "liveMatch"),
+    (snapshot) => {
+      const data = snapshot.val();
+
+      if (data) {
+        match = data;
+
+        try { renderLive(); } catch(e) {}
+        try { renderScorecard(); } catch(e) {}
+      }
+    }
+  );
+}
+
+window.addEventListener('load', () => {
+  setTimeout(startLiveSync, 1000);
+});
+  
 </script>
 </body>
 </html>
