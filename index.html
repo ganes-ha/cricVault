@@ -2152,16 +2152,16 @@ function renderLive() {
     ${isScorer() ? `
     <div class="keypad mt-3">
 	  <button class="key runs-0" onclick="scoreRuns(0)">0</button>
-	  <button class="key runs-1" onclick="scoreRuns(1)">0</button>
-	  <button class="key runs-2" onclick="scoreRuns(2)">0</button>
-	  <button class="key runs-3" onclick="scoreRuns(3)">0</button>
-	  <button class="key runs-4" onclick="scoreRuns(4)">0</button>
-	  <button class="key runs-6" onclick="scoreRuns(6)">0</button>
+	  <button class="key runs-1" onclick="scoreRuns(1)">1</button>
+	  <button class="key runs-2" onclick="scoreRuns(2)">2</button>
+	  <button class="key runs-3" onclick="scoreRuns(3)">3</button>
+	  <button class="key runs-4" onclick="scoreRuns(4)">4</button>
+	  <button class="key runs-6" onclick="scoreRuns(6)">6</button>
 	  <button class="key extra" onclick="openWideModal()">Wide</button>
 	  <button class="key extra" onclick="openNoBallModal()">No Ball</button>
 	  <button class="key wicket" onclick="openWicketModal()">Wicket</button>
 	  <button class="key misc" onclick="openByeModal('bye')">Bye</button>
-	  <button class="key misc" onclick="openByeModal('legbye')"LegBye</button>
+	  <button class="key misc" onclick="openByeModal('legbye')">LegBye</button>
 	  <button class="key undo" onclick="undo()">Undo</button>
 	</div>
     ` : `
@@ -2758,6 +2758,9 @@ function startLiveSync() {
 	    return;
       }
       if(!window.lastSynced || data.lastUpdated > window.lastSynced){
+		  if(data.lastUpdated && match?.lastUpdated && data.lastUpdated <= match.lastUpdated){
+             return;
+      }
 	    match = data;
 	    window.lastSynced = data.lastUpdated;
 	  }
@@ -2839,9 +2842,16 @@ window.addEventListener(
          window.liveUnsubscribe();
    }
 );
+	
 window.addEventListener('load', () => {
-  setTimeout(startHistorySync);
-  setTimeout(startLiveSync);
+  const waitForFirebase = setInterval(() => {
+      if(window.firebaseDb){
+          clearInterval(waitForFirebase);
+          startHistorySync();
+          startLiveSync();
+      }
+  },100);
+
 });
   
 </script>
