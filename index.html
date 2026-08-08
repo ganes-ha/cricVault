@@ -478,7 +478,6 @@ function matchForPersist(m) {
     delete copy._overEndedWithWicket;
     return copy;
   };
-  m.lastUpdated = Date.now();
   return { ...rest, inn1: cleanInn(rest.inn1), inn2: cleanInn(rest.inn2) };
 }
 	
@@ -1107,7 +1106,6 @@ function record(action) {
   if (action.type === 'runs') {
     const r = action.runs;
     striker.runs += r;
-    striker.balls += 1;
     if (r === 4) striker.fours++;
     if (r === 6) striker.sixes++;
     bowler.runs += r;
@@ -2757,13 +2755,11 @@ function startLiveSync() {
       if (isScorer() && Date.now() - lastLocalUpdate < 2000) {
 	    return;
       }
-      if(!window.lastSynced || data.lastUpdated > window.lastSynced){
-		  if(data.lastUpdated && match?.lastUpdated && data.lastUpdated <= match.lastUpdated){
+	  if(data.lastUpdated && match?.lastUpdated && data.lastUpdated <= match.lastUpdated){
              return;
       }
-	    match = data;
-	    window.lastSynced = data.lastUpdated;
-	  }
+	  match = data;
+	  window.lastSynced = data.lastUpdated || Date.now();;
       match.history ||=[];
 
       // Firebase may remove empty arrays; drop stale session-only flags safely
