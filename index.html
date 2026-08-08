@@ -340,7 +340,8 @@ import {
   getDatabase,
   ref,
   set,
-  onValue
+  onValue,
+  remove
 } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-database.js";
 
 const firebaseConfig = {
@@ -540,7 +541,7 @@ const USERS = [
 let currentUser = null;
 
 function isScorer() {
-  return currentUser && currentUser.role === 'scorer';
+  return currentUser && ( currentUser.role === 'scorer' || currentUser.role === 'cloudadmin');
 }
 function isLoggedIn() {
   return !!currentUser;
@@ -661,7 +662,7 @@ document.querySelectorAll('.nav button').forEach(btn => {
     document.getElementById('screen-' + btn.dataset.screen).classList.add('active');
     if (btn.dataset.screen === 'live') renderLive();
     if (btn.dataset.screen === 'scorecard') renderScorecard();
-    if (btn.dataset.screen === 'history') ();
+    if (btn.dataset.screen === 'history') renderHistory();
     if (btn.dataset.screen === 'setup') renderSetup();
   });
 });
@@ -2679,6 +2680,34 @@ function clearHistory() {
   renderHistory();
   toast('History cleared');
 }
+async function clearCloudHistory() {
+  if (!isCloudAdmin()) {
+    toast('Cloud Admin required');
+    return;
+  }
+  const code = prompt(
+    'Enter Cloud Admin code'
+  );
+  if (code !== 'j72e#05t') {
+    toast('Invalid code');
+    return;
+  }
+  if (!confirm(
+    'Delete ALL cloud history permanently?'
+  )) return;
+  try {
+    await remove(
+      firebaseRef(firebaseDb, "matchHistory")
+    );
+    history = [];
+    save();
+    renderHistory();
+    toast('Cloud history deleted');
+  } catch (err) {
+    console.error(err);
+    toast('Cloud delete failed');
+  }
+}
 	
 function renderHistory() {
   const el = document.getElementById('history-list');
@@ -2728,10 +2757,10 @@ function renderHistory() {
     </button>
   ` : ''}
 
-  ${scorer ? `
+  ${isCloudAdmin() ? `
     <button class="btn btn-secondary btn-block mt-3"
-      onclick="clearHistory()">
-      Clear History
+      onclick="clearCloudHistory()">
+      Clear Cloud History
     </button>
   ` : ''}
 `;
