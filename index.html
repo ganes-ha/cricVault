@@ -429,13 +429,13 @@ let history = JSON.parse(localStorage.getItem('tejas_history') || '[]');
 let selectedA = new Set();
 let selectedB = new Set();
 
-let hiddenHistoryIds = new Set( JSON.parse(localStorage.getItem('tejas_hidden_history') || '[]'));
+let hiddenHistoryIds = new Set( JSON.parse(localStorage.getItem('tejas_hidden_history') || '[]').map(String));
 let showHiddenHistory = false;
-function saveHiddenHistory(){
+function saveHiddenHistory() {
   try {
-    localStorage.setItem('tejas_hidden_history',JSON.stringify([...hiddenHistoryIds]));
-  } catch(e) {
-    console.error('localStorage save failed (tejas_hidden_history):',e);
+    localStorage.setItem('tejas_hidden_history', JSON.stringify([...hiddenHistoryIds]));
+  } catch (e) {
+	  console.error('localStorage save failed (tejas_hidden_history):', e);
   }
 }
 /* ---------- helpers ---------- */
@@ -617,7 +617,7 @@ function removePlayer(idx) {
 }
 function resetDefaultPlayers() {
   if (!requireScorer('reset players')) return;
-  if (!confirm('Reset to the original default squad?')) return;
+  if (!confirm('Reset to the default squad?')) return;
   players = [...DEFAULT_PLAYERS]; save(); renderPlayers(); toast('Reset done');
 }
 
@@ -955,6 +955,7 @@ function confirmStartInnings() {
   inn.batting[s].order  = 0;
   inn.batting[ns].order = 1;
   inn.battingOrder = 2;
+  inn.overStartTotal = inn.total; // for maiden detection
   match.status = 'live';
   closeModal();
   save();
@@ -1226,6 +1227,10 @@ function record(action) {
 
     // End of over? (exactly 6 legal balls by this bowler in the spell)
     if (bowler.totalBalls > 0 && bowler.totalBalls % 6 === 0) {
+	  // Maiden = no runs of any kind scored in the over
+	  if (inn.total === (inn.overStartTotal ?? 0)) {
+	    bowler.maidens = (bowler.maidens || 0) + 1;
+	  }
       bowler.ballsThisOver = 0;
       inn.currentOver = [];
       inn.lastBowlerIdx = inn.bowlerIdx;
@@ -1269,6 +1274,27 @@ function record(action) {
 }
 
 /* ---------- New batsman selection after wicket (dropdown) ---------- */
+function getEligibleBowlersList() {
+  const inn = getCurrentInnings();
+  const available = inn.bowling
+    .map((b, i) => ({ ...b, idx: i }))
+    .filter(b => {
+      if (b.idx === inn.lastBowlerIdx) return false;
+      if (match.maxBowl > 0) {
+        const oversBowled = Math.floor(b.totalBalls / 6);
+        if (oversBowled >= match.maxBowl) return false;
+      }
+      if (match.commonPlayer && b.name === match.commonPlayer && !canCommonBowl()) return false;
+      return true;
+    });
+  if (available.length) return available;
+  return inn.bowling.map((b, i) => ({ ...b, idx: i })).filter(b => {
+    if (b.idx === inn.lastBowlerIdx) return false;
+    if (match.commonPlayer && b.name === match.commonPlayer && !canCommonBowl()) return false;
+    return true;
+  });
+}
+	
 function promptNewBatsman(ctx) {
   if (!requireScorer('select batsman')) return;
   if (!match || match.status !== 'live') return;
@@ -1278,7 +1304,6 @@ function promptNewBatsman(ctx) {
   let available = inn.batting
     .map((b, i) => ({ b, i }))
     .filter(({ b }) => !b.out && !b.retired && b.order === -1 && b.balls === 0 && b.runs === 0);
-  // Common player cannot bat if they already bowled
   if (match.commonPlayer && !canCommonBat()) {
     available = available.filter(({ b }) => b.name !== match.commonPlayer);
   }
@@ -1289,47 +1314,55 @@ function promptNewBatsman(ctx) {
       : 'No batsmen left');
     return;
   }
-
-  const notOut = inn.batting.filter((b, i) =>
-    !b.out && !b.retired && i !== inn.strikerIdx && i !== inn.nonStrikerIdx
-      ? false
-      : (!b.out && !b.retired && (i === inn.strikerIdx || i === inn.nonStrikerIdx))
-  );
-  // The surviving batsman at the crease
+	
   const survivorIdx = ctx.outWasStriker ? inn.nonStrikerIdx : inn.strikerIdx;
   const survivor = inn.batting[survivorIdx];
 
   let ruleHint = '';
   if (ctx.onLastBallOfOver) {
     ruleHint = ctx.outWasStriker
-      ? `Wicket on last ball of over. After over ends, ${survivor ? survivor.name : 'non-striker'} will face the next over (strike rotates).`
-      : `Wicket on last ball of over. After over ends, the new batsman will face the next over (strike rotates).`;
+      ? `Last ball of over · ${survivor ? survivor.name : 'non-striker'} recommended on strike next over.`
+	  : `Last ball of over · new batsman recommended on strike next over.`;
   } else {
     ruleHint = ctx.outWasStriker
       ? 'Striker out — new batsman normally faces the next ball.'
       : 'Non-striker out — striker continues to face.';
   }
+    const needBowler = !!ctx.onLastBallOfOver;
+	let bowlerHtml = '';
+	if (needBowler) {
+	  const list = getEligibleBowlersList();
+	  if (list.length) {
+	    bowlerHtml = `
+	      <div class="mt-3">
+	        <label>New bowler (over complete)</label>
+	        <select id="new-batsman-bowler">
+	          ${list.map(b => `<option value="${b.idx}">${b.name} (${oversStr(b.totalBalls)} ov, ${b.runs}r ${b.wickets}w)</option>`).join('')}
+	        </select>
+	      </div>`;
+	  }
+	}
 
   showModal(`
-    <h3>Select New Batsman</h3>
+    <h3>${needBowler ? 'New Batsman + Bowler' : 'Select New Batsman'}</h3>
     <p class="text-sm text-muted mb-2">${ruleHint}</p>
     <label>Who comes in to bat?</label>
     <select id="new-batsman-idx">
       ${available.map(({ b, i }) => `<option value="${i}">${b.name}</option>`).join('')}
     </select>
     <div class="mt-3">
-      <label>Who faces the next ball? (Striker)</label>
+      <label>Who faces next? (Striker)</label>
       <select id="next-striker-choice">
         <option value="new">${ctx.outWasStriker && !ctx.onLastBallOfOver ? 'New batsman (recommended)' : 'New batsman'}</option>
-        <option value="survivor">${survivor ? survivor.name : 'Other batsman'}${ctx.onLastBallOfOver && ctx.outWasStriker ? ' (recommended – over ended)' : ''}</option>
+        <option value="survivor">${survivor ? survivor.name : 'Other batsman'}${ctx.onLastBallOfOver && ctx.outWasStriker ? ' (recommended)' : ''}</option>
       </select>
     </div>
+	${bowlerHtml}
     <div class="modal-actions">
       <button class="btn btn-primary btn-block" onclick="confirmNewBatsman(${ctx.outWasStriker ? 1 : 0}, ${ctx.onLastBallOfOver ? 1 : 0})">Confirm</button>
     </div>
   `);
 
-  // Pre-select recommended striker choice
   setTimeout(() => {
     const sel = document.getElementById('next-striker-choice');
     if (!sel) return;
@@ -1408,12 +1441,24 @@ function confirmNewBatsman(outWasStriker, onLastBallOfOver) {
   const needNewBowler = inn._overEndedWithWicket;
   inn._overEndedWithWicket = false;
 
+// Combined modal: apply new bowler in the same step when over ended with wicket
+  const bowlerSel = document.getElementById('new-batsman-bowler');
+  if (needNewBowler && bowlerSel) {
+    const bIdx = +bowlerSel.value;
+    const bName = inn.bowling[bIdx]?.name;
+    if (match.commonPlayer && bName === match.commonPlayer && !canCommonBowl()) {
+      return toast(`${match.commonPlayer} already batted — cannot bowl`);
+    }
+    inn.bowlerIdx = bIdx;
+    inn.overStartTotal = inn.total;
+  }
+	
   closeModal();
   save();
   renderLive();
   toast(`${inn.batting[newIdx].name} in · ${inn.batting[strikerIdx].name} on strike`);
 
-  if (needNewBowler) {
+  if (needNewBowler && !bowlerSel) {
     setTimeout(() => promptNewBowler(), 400);
   }
 }
@@ -1717,28 +1762,7 @@ function promptNewBowler() {
   if (!match || match.status !== 'live') return;
   const inn = getCurrentInnings();
   if (inn.isComplete) return;
-
-  const available = inn.bowling
-    .map((b,i) => ({...b, idx:i}))
-    .filter(b => {
-      if (b.idx === inn.lastBowlerIdx) return false; // no consecutive
-      if (match.maxBowl > 0) {
-        const oversBowled = Math.floor(b.totalBalls / 6);
-        if (oversBowled >= match.maxBowl) return false;
-      }
-      // Common player cannot bowl if they have already batted
-      if (match.commonPlayer && b.name === match.commonPlayer && !canCommonBowl()) return false;
-      return true;
-    });
-
-  const list = available.length
-    ? available
-    : inn.bowling.map((b,i)=>({...b,idx:i})).filter(b => {
-        if (b.idx === inn.lastBowlerIdx) return false;
-        if (match.commonPlayer && b.name === match.commonPlayer && !canCommonBowl()) return false;
-        return true;
-      });
-
+  const list = getEligibleBowlersList();
   if (list.length === 0) {
     toast('No eligible bowlers (common player may be blocked after batting)');
     return;
@@ -1764,6 +1788,7 @@ function setNewBowler() {
     return toast(`${match.commonPlayer} already batted — cannot bowl`);
   }
   inn.bowlerIdx = idx;
+  inn.overStartTotal = inn.total; // start of new over — for maiden detection
   closeModal(); save(); renderLive();
 }
 
@@ -2203,18 +2228,19 @@ function confirmAddPlayerMidMatch() {
 
   if (common) {
     if (afterBatEx === afterBowlEx) {
-      // Teams now even → must choose which team keeps the common player
+      // Teams now even → ask user which team keeps the common player
       promptCommonRebalance(common, 'even');
       return;
     }
+	// Clear cases: auto-move common to the still-shorter side (no extra modal)
     if (afterBatEx > afterBowlEx) {
-      // Batting side now has more exclusive players → common should leave batting, stay only on bowling
-      promptCommonRebalance(common, 'bowl-only');
+      autoApplyCommonRebalance(common, 'bowl-only');
+	  toast(name + ' added · ' + common + ' now only on bowling side');
       return;
     }
     if (afterBowlEx > afterBatEx) {
-      // Bowling side now has more → common should leave bowling, stay only on batting
-      promptCommonRebalance(common, 'bat-only');
+      autoApplyCommonRebalance(common, 'bat-only');
+      toast(name + ' added · ' + common + ' now only on batting side');
       return;
     }
   }
@@ -2266,87 +2292,78 @@ function promptCommonRebalance(commonName, situation) {
 
 function applyCommonRebalance(commonName) {
   const choice = document.getElementById('common-keep-side').value;
+  doCommonRebalance(commonName, choice, true);
+}
+
+function autoApplyCommonRebalance(commonName, situation) {
+  const { batKey, bowlKey } = getTeamRefs();
+  const choice = situation === 'bowl-only' ? bowlKey : batKey;
+  doCommonRebalance(commonName, choice, false);
+}
+
+function doCommonRebalance(commonName, choice, fromModal) {
   const inn = getCurrentInnings();
-  const { batTeam, bowlTeam, batKey, bowlKey } = getTeamRefs();
+  const { batKey, bowlKey } = getTeamRefs();
 
   if (choice === 'both') {
-    // Keep as common – no structural change
     match.commonPlayer = commonName;
     match.allowCommon = true;
-    // Ensure name is on both team lists
+    
     if (!match.teamA.players.includes(commonName)) match.teamA.players.push(commonName);
     if (!match.teamB.players.includes(commonName)) match.teamB.players.push(commonName);
-    closeModal();
+    if (fromModal) closeModal();
     save();
     renderLive();
-    toast(`${commonName} remains common to both teams`);
+    if (fromModal) toast(`${commonName} remains common to both teams`);
     return;
   }
 
-  // choice is 'A' or 'B' – keep only on that team
   const keepTeam = choice === 'A' ? match.teamA : match.teamB;
   const removeTeam = choice === 'A' ? match.teamB : match.teamA;
-  const keepKey = choice;
   const removeKey = choice === 'A' ? 'B' : 'A';
 
-  // Remove from the other team's player list
   removeTeam.players = removeTeam.players.filter(p => p !== commonName);
 
-  // Remove from current innings lists if that side no longer has them
-  // Batting side
-  if ((batKey === removeKey)) {
-    // Common was on batting list – remove only if not yet batted / not currently in
-    // Keep batting record if they already have runs/balls (historical), but mark so they can't come in again
+  if (batKey === removeKey) {
     const bIdx = inn.batting.findIndex(b => b.name === commonName);
     if (bIdx >= 0) {
       const b = inn.batting[bIdx];
       if (b.order === -1 && !b.out && !b.retired && b.balls === 0 && b.runs === 0) {
-        // Never played – safe to remove from batting queue
         inn.batting.splice(bIdx, 1);
-        // Fix indices if needed
+        
         if (inn.strikerIdx === bIdx) inn.strikerIdx = Math.max(0, inn.strikerIdx - 1);
         if (inn.nonStrikerIdx === bIdx) inn.nonStrikerIdx = Math.max(0, inn.nonStrikerIdx - 1);
-        if (inn.strikerIdx >= inn.batting.length) inn.strikerIdx = inn.batting.length - 1;
+        if (inn.strikerIdx >= inn.batting.length) inn.strikerIdx = Math.max(0, inn.batting.length - 1);
         if (inn.nonStrikerIdx >= inn.batting.length) inn.nonStrikerIdx = Math.max(0, inn.batting.length - 1);
-      } else {
-        // Already involved – leave the batting card but they won't bowl for the other side
       }
     }
   }
 
-  // Bowling side
   if (bowlKey === removeKey) {
     const wIdx = inn.bowling.findIndex(b => b.name === commonName);
     if (wIdx >= 0) {
       const bw = inn.bowling[wIdx];
       if (bw.totalBalls === 0 && bw.wides === 0 && bw.noballs === 0) {
-        // Never bowled – remove
         if (inn.bowlerIdx === wIdx) {
-          // currently bowling – force change
           inn.bowling.splice(wIdx, 1);
           inn.bowlerIdx = Math.max(0, Math.min(inn.bowlerIdx, inn.bowling.length - 1));
-          toast(`${commonName} removed from bowling – select another bowler if needed`);
+          if (fromModal) toast(`${commonName} removed from bowling – select another bowler if needed`);
         } else {
           inn.bowling.splice(wIdx, 1);
           if (inn.bowlerIdx > wIdx) inn.bowlerIdx--;
           if (inn.lastBowlerIdx > wIdx) inn.lastBowlerIdx--;
         }
       }
-      // if already bowled, keep the bowling figures for the scorecard
     }
   }
 
-  // Ensure kept on the chosen team
   if (!keepTeam.players.includes(commonName)) keepTeam.players.push(commonName);
-
-  match.commonPlayer = null; // no longer common
   match.allowCommon = false;
 
-  closeModal();
+  if (fromModal) closeModal();
   save();
   renderLive();
-  toast(`${commonName} now only in ${keepTeam.name}`);
-}
+  if (fromModal) toast(`${commonName} now only in ${keepTeam.name}`);
 
 function finishAndClear() {
   if (!requireScorer('clear match')) return;
@@ -2550,47 +2567,64 @@ function renderScorecard() {
 }
 
 /* ---------- HISTORY ---------- */
+function hideHistoryEntry(id) {
+  if (!requireScorer('hide history')) return;
+  hiddenHistoryIds.add(String(id));
+  saveHiddenHistory();
+  renderHistory();
+  toast('Match hidden');
+}
+function unhideHistoryEntry(id) {
+  if (!requireScorer('unhide history')) return;
+  hiddenHistoryIds.delete(String(id));
+  saveHiddenHistory();
+  renderHistory();
+  toast('Match unhidden');
+}
+function toggleShowHiddenHistory() {
+  showHiddenHistory = !showHiddenHistory;
+  renderHistory();
+}
+	
 function renderHistory() {
   const el = document.getElementById('history-list');
   if (!history.length) {
     el.innerHTML = `<div class="empty"><p>No past matches yet.</p></div>`;
     return;
   }
-  // Serial number: newest match is highest number (history is unshifted)
+
   const total = history.length;
   const scorer = isScorer();
-  const visibleCount = history.filter(h => !hiddenHistoryIds.has(h.id)).length;
-  const hiddenCount = total - visibleCount;
+  const hiddenCount = history.filter(h => hiddenHistoryIds.has(String(h.id))).length;
 
   const rows = history.map((h, i) => {
-  const isHidden = hiddenHistoryIds.has(h.id);
-  if (isHidden && !(scorer && showHiddenHistory)) return ''; // skip: hidden and not shown
-  const serial = total - i; // Match #1 is oldest, highest is newest
+  const isHidden = hiddenHistoryIds.has(String(h.id));
+  if (isHidden && !(scorer && showHiddenHistory)) return '';
+  const serial = total - i;
   const d = new Date(h.date);
   const dateStr = d.toLocaleDateString(undefined, { day:'2-digit', month:'short', year:'numeric' });
-  const timeStr = d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
   return `
       <div class="match-card mb-2"${isHidden ? ' style="opacity:0.55"' : ''}>
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
           <div style="flex:1" onclick="viewHistoryMatch(${i})">
-            <div class="font-bold">#${serial} Â· ${h.result || 'Match'}${isHidden ? ' <span class="text-sm text-muted">(hidden)</span>' : ''}</div>
-            <div class="text-sm text-muted">${h.teamA} ${h.inn1} vs ${h.teamB} ${h.inn2} Â· ${h.overs} ov</div>
-           </div>
+            <div class="font-bold">#${serial} · ${h.result || 'Match'}${isHidden ? ' <span class="text-sm text-muted">(hidden)</span>' : ''}</div>
+             <div class="text-sm text-muted">${h.teamA} ${h.inn1} vs ${h.teamB} ${h.inn2} · ${h.overs} ov</div>
+            </div>
           <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0">
   				<button class="btn btn-sm btn-secondary" style="padding:6px 10px;font-size:0.75rem"
-  				  onclick="event.stopPropagation();showMatchDateDialog(${i})">${dateStr}</button>
-  				${scorer ? `
-  				  <button class="btn btn-sm btn-secondary" style="padding:6px 10px;font-size:0.75rem"
-  					onclick="event.stopPropagation();${isHidden ? `unhideHistoryEntry('${h.id}')` : `hideHistoryEntry('${h.id}')`}">${isHidden ? 'Unhide' : 'Hide'}</button>
-  				` : ''}
-			    </div>
+              onclick="event.stopPropagation();showMatchDateDialog(${i})">${dateStr}</button>
+              ${scorer ? `
+			  <button class="btn btn-sm btn-secondary" style="padding:6px 10px;font-size:0.75rem"
+			  onclick="event.stopPropagation();${isHidden ? `unhideHistoryEntry('${h.id}')` : `hideHistoryEntry('${h.id}')`}">${isHidden ? 'Unhide' : 'Hide'}</button>
+			  ` : ''}
+           </div>
         </div>
       </div>`;
   }).join('');
   
-  const emptyVisible = !rows && `<div class="empty"><p>No past matches yet.</p></div>`;
-  
-  el.innerHTML = (rows || emptyVisible || '') + `
+   const emptyVisible = !rows.trim() ? `<div class="empty"><p>No visible matches.${scorer && hiddenCount ? ' Use “Show Hidden History” below.' : ''}</p></div>` : '';
+ 
+   el.innerHTML = (rows || emptyVisible) + `
     ${scorer && hiddenCount > 0 ? `
       <button class="btn btn-secondary btn-block mt-2" onclick="toggleShowHiddenHistory()">
         ${showHiddenHistory ? 'Hide Hidden History' : `Show Hidden History (${hiddenCount})`}
