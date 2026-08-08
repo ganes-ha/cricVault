@@ -205,6 +205,10 @@
 
   <div class="app" id="main-app" style="display:none">
     <header>
+	<div id="network-status"
+		style="font-size:11px;color:#22c55e">
+		🟢 Online
+		</div>
       <div>
         <h1>🏏 CricVault</h1>
         <div class="sub">Hit Hard. Stay In.</div>
@@ -401,13 +405,21 @@ window.firebaseOnValue = onValue;
    - Any player can keep or bowl; no WK role is stored or required
    ============================================================ */
 async function saveMatchToCloud() {
-  if (!match || !window.firebaseDb) return;
-
-  await firebaseSet(
-    firebaseRef(firebaseDb, "liveMatch"),
-    matchForPersist(match)
-  );
+  if(!match || !window.firebaseDb) return;
+  try{
+      await firebaseSet(
+          firebaseRef(firebaseDb,"liveMatch"),
+          matchForPersist(match)
+      );
+  }catch(err){
+      console.error(err);
+      localStorage.setItem(
+        "pendingCloudSave",
+        JSON.stringify(matchForPersist(match))
+      );
+  }
 }
+	
 async function saveMatchHistoryToCloud(entry) {
   if (!window.firebaseDb) return;
   try {
@@ -466,11 +478,14 @@ function matchForPersist(m) {
     delete copy._overEndedWithWicket;
     return copy;
   };
+  m.lastUpdated = Date.now();
   return { ...rest, inn1: cleanInn(rest.inn1), inn2: cleanInn(rest.inn2) };
 }
 	
 let _cloudSaveTimer = null;	
+let lastLocalUpdate = 0;
 function save() {
+  lastLocalUpdate = Date.now();
   try {
     localStorage.setItem('tejas_players', JSON.stringify(players));
     if (match) {
@@ -1322,6 +1337,10 @@ function record(action) {
   if (!pendingBatsmanCtx) inn._overEndedWithWicket = false;
 
   save();
+
+  if(action.type === 'wicket' || inn.isComplete || match.status === 'completed'){
+     saveMatchToCloud();
+  }
   renderLive();
 
   // After a wicket, select who comes in (dropdown of yet-to-bat)
@@ -1522,16 +1541,15 @@ function confirmNewBatsman(outWasStriker, onLastBallOfOver) {
 }
 
 /* ---------- UI helpers that call record() ---------- */
-let isScoring = false;
+let lastTap = 0;
 function scoreRuns(r) {
-  if (!requireScorer('score')) return;
-  if(isScoring) return; //Prevent overlapping taps
-
-  isScoring = true;
-  record({ type: 'runs', runs: r });
-
-  //Unlock the UI after 150ms(fast enough for rapid scoring, slow enough to protect the UI)
-  setTimeout(() => { isScoring = false; },150);
+  const now = Date.now();
+  if(now - lastTap < 40) return;
+  lastTap = now;
+  record({
+    type:'runs',
+    runs:r
+  });
 }
 
 function openWideModal() {
@@ -2133,18 +2151,18 @@ function renderLive() {
 
     ${isScorer() ? `
     <div class="keypad mt-3">
-	  <button class="key runs-0" onpointerup="event.preventDefault(); scoreRuns(0)" onclick="event.preventDefault()">0</button>
-	  <button class="key runs-1" onpointerup="event.preventDefault(); scoreRuns(1)" onclick="event.preventDefault()">1</button>
-	  <button class="key runs-2" onpointerup="event.preventDefault(); scoreRuns(2)" onclick="event.preventDefault()">2</button>
-	  <button class="key runs-3" onpointerup="event.preventDefault(); scoreRuns(3)" onclick="event.preventDefault()">3</button>
-	  <button class="key runs-4" onpointerup="event.preventDefault(); scoreRuns(4)" onclick="event.preventDefault()">4</button>
-	  <button class="key runs-6" onpointerup="event.preventDefault(); scoreRuns(6)" onclick="event.preventDefault()">6</button>
-	  <button class="key extra" onpointerup="event.preventDefault(); openWideModal()" onclick="event.preventDefault()">Wide</button>
-	  <button class="key extra" onpointerup="event.preventDefault(); openNoBallModal()" onclick="event.preventDefault()">No Ball</button>
-	  <button class="key wicket" onpointerup="event.preventDefault(); openWicketModal()" onclick="event.preventDefault()">Wicket</button>
-	  <button class="key misc" onpointerup="event.preventDefault(); openByeModal('bye')" onclick="event.preventDefault()">Bye</button>
-	  <button class="key misc" onpointerup="event.preventDefault(); openByeModal('legbye')" onclick="event.preventDefault()">LegBye</button>
-	  <button class="key undo" onpointerup="event.preventDefault(); undo()" onclick="event.preventDefault()">Undo</button>
+	  <button class="key runs-0" onclick="scoreRuns(0)">0</button>
+	  <button class="key runs-1" onclick="scoreRuns(1)">0</button>
+	  <button class="key runs-2" onclick="scoreRuns(2)">0</button>
+	  <button class="key runs-3" onclick="scoreRuns(3)">0</button>
+	  <button class="key runs-4" onclick="scoreRuns(4)">0</button>
+	  <button class="key runs-6" onclick="scoreRuns(6)">0</button>
+	  <button class="key extra" onclick="openWideModal()">Wide</button>
+	  <button class="key extra" onclick="openNoBallModal()">No Ball</button>
+	  <button class="key wicket" onclick="openWicketModal()">Wicket</button>
+	  <button class="key misc" onclick="openByeModal('bye')">Bye</button>
+	  <button class="key misc" onclick="openByeModal('legbye')"LegBye</button>
+	  <button class="key undo" onclick="undo()">Undo</button>
 	</div>
     ` : `
     <div class="card mt-3" style="text-align:center;padding:16px;border-style:dashed">
@@ -2732,15 +2750,17 @@ if (currentUser) {
 function startLiveSync() {
   if (!window.firebaseDb) return;
 
-  firebaseOnValue(
-    firebaseRef(firebaseDb, "liveMatch"),
-    (snapshot) => {
-
+  window.liveUnsubscribe = firebaseOnValue( firebaseRef(firebaseDb, "liveMatch"),(snapshot) => {
       const data = snapshot.val();
 
       if (!data) return;
-
-      match = data;
+      if (isScorer() && Date.now() - lastLocalUpdate < 2000) {
+	    return;
+      }
+      if(!window.lastSynced || data.lastUpdated > window.lastSynced){
+	    match = data;
+	    window.lastSynced = data.lastUpdated;
+	  }
       match.history ||=[];
 
       // Firebase may remove empty arrays; drop stale session-only flags safely
@@ -2758,16 +2778,15 @@ function startLiveSync() {
         match.inn2.fallOfWickets ||= [];
         match.inn2.batting ||= [];
         match.inn2.bowling ||= [];
-		delete match.inn1._pendingNewBatsman;
-        delete match.inn1._overEndedWithWicket;
+		delete match.inn2._pendingNewBatsman;
+        delete match.inn2._overEndedWithWicket;
       }
 
       const liveActive = document.getElementById('screen-live')?.classList.contains('active');
       const scActive = document.getElementById('screen-scorecard')?.classList.contains('active');
 	  try {
-		  if (liveActive) renderLive();
-		  else if (scActive) renderScorecard();
-		  else if (match.status === 'live') renderLive();
+		  renderLive();
+		  renderScorecard();
 	  } catch (e) {
      	  console.error('live sync render', e);
 	  }
@@ -2802,10 +2821,27 @@ function startHistorySync() {
     }
   );
 }
-  
+window.addEventListener("online", () => {
+   saveMatchToCloud();
+   document.getElementById("network-status").innerHTML =
+      "🟢 Online";
+});
+
+window.addEventListener("offline", () => {
+   document.getElementById("network-status").innerHTML =
+      "🔴 Offline";
+});
+	
+window.addEventListener(
+   "beforeunload",
+   () => {
+      if(window.liveUnsubscribe)
+         window.liveUnsubscribe();
+   }
+);
 window.addEventListener('load', () => {
-  setTimeout(startHistorySync, 1000);
-  setTimeout(startLiveSync, 1000);
+  setTimeout(startHistorySync);
+  setTimeout(startLiveSync);
 });
   
 </script>
