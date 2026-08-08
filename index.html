@@ -1782,21 +1782,8 @@ function endInnings(reason) {
       awards: match.awards,
       full: JSON.parse(JSON.stringify(match))
     });
-    history.unshift({
-  id: match.id, date: match.date,
-  teamA: match.teamA.name, teamB: match.teamB.name,
-  result: match.result,
-  inn1: `${match.inn1.total}/${match.inn1.wickets}`,
-  inn2: `${match.inn2.total}/${match.inn2.wickets}`,
-  overs: match.overs,
-  awards: match.awards,
-  full: JSON.parse(JSON.stringify(match))
-});
-if (history.length > 30) history.pop();
-saveMatchHistoryToCloud(history[0]);   // ← add this line
-toast(match.result);
-    
     if (history.length > 30) history.pop();
+    saveMatchHistoryToCloud(history[0]);
     toast(match.result);
   }
   save();
@@ -2633,6 +2620,7 @@ function startLiveSync() {
       }
     }
   );
+}
 
 function startHistorySync() {
   if (!window.firebaseDb) return;
