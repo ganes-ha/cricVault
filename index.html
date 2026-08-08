@@ -41,10 +41,11 @@
       border-bottom: 3px solid transparent; transition: all 0.15s;
     }
     .nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
-    .screen { display: none; flex: 1; flex-direction: column; padding: 12px; gap: 12px; overflow-y: auto; }
+    .screen { display: none; flex: 1; flex-direction: column; padding: 12px; gap: 12px; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
     .screen.active { display: flex; }
     .card {
       background: var(--card); border-radius: 14px; padding: 14px; border: 1px solid var(--border);
+	  contain: layout style;
     }
     .card-title {
       font-size: 0.78rem; font-weight: 700; color: var(--muted);
@@ -404,7 +405,7 @@ async function saveMatchToCloud() {
 
   await firebaseSet(
     firebaseRef(firebaseDb, "liveMatch"),
-    match
+    matchForPersist(match)
   );
 }
 async function saveMatchHistoryToCloud(entry) {
@@ -439,21 +440,39 @@ function saveHiddenHistory() {
   }
 }
 /* ---------- helpers ---------- */
+/** Strip session-only fields so they never survive localStorage / Firebase */
+function matchForPersist(m) {
+  if (!m) return m;
+  const { history: _undo, ...rest } = m;
+  const cleanInn = (inn) => {
+    if (!inn) return inn;
+    const copy = { ...inn };
+    delete copy._pendingNewBatsman;
+    delete copy._overEndedWithWicket;
+    return copy;
+  };
+  return { ...rest, inn1: cleanInn(rest.inn1), inn2: cleanInn(rest.inn2) };
+}
+	
+let _cloudSaveTimer = null;	
 function save() {
   try {
     localStorage.setItem('tejas_players', JSON.stringify(players));
     if (match) {
-      // don't persist the undo stack (match.history) — it's session-only and bulky
-      const { history: _undo, ...matchForStorage } = match;
-      localStorage.setItem('tejas_match', JSON.stringify(matchForStorage));
+      localStorage.setItem('tejas_match', JSON.stringify(matchForPersist(match)));
     } else {
       localStorage.removeItem('tejas_match');
     }
     localStorage.setItem('tejas_history', JSON.stringify(history));
   } catch (e) {
-    console.error('localStorage save failed (quota?):', e); // never let this block rendering
+    console.error('localStorage save failed (quota?):', e);
   }
-  saveMatchToCloud();
+  // Debounce Firebase writes — rapid scoring must not flood the network on mobile
+ if (_cloudSaveTimer) clearTimeout(_cloudSaveTimer);
+	 _cloudSaveTimer = setTimeout(() => {
+	   _cloudSaveTimer = null;
+	   saveMatchToCloud();
+	 }, 280);
 }
 
 function toast(msg, ms=2400) {
@@ -462,9 +481,14 @@ function toast(msg, ms=2400) {
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), ms);
 }
+let _modalOpenedAt = 0;
 function showModal(html) {
   document.getElementById('modal-body').innerHTML = html;
   document.getElementById('modal').classList.add('show');
+  _modalOpenedAt = Date.now();
+}
+function modalActionSafe() {
+  return Date.now() - _modalOpenedAt >= 320;
 }
 function closeModal() {
   document.getElementById('modal').classList.remove('show');
@@ -1256,20 +1280,23 @@ function record(action) {
     renderLive();
     return;
   }
-
+ 
   // Innings overs complete?
   if (!inn.isComplete && inn.legalBalls >= match.overs * 6) {
     endInnings('overs');
   }
+  const pendingBatsmanCtx = (action.type === 'wicket') ? inn._pendingNewBatsman : null;
+  const overEndedWithWicket = !!inn._overEndedWithWicket;
+  inn._pendingNewBatsman = null;
+  if (!pendingBatsmanCtx) inn._overEndedWithWicket = false;
 
   save();
   renderLive();
 
   // After a wicket, select who comes in (dropdown of yet-to-bat)
-  if (inn._pendingNewBatsman && match.status === 'live' && !inn.isComplete) {
-    const ctx = inn._pendingNewBatsman;
-    inn._pendingNewBatsman = null;
-    setTimeout(() => promptNewBatsman(ctx), 320);
+  if (pendingBatsmanCtx && match.status === 'live' && !inn.isComplete) {
+    if (overEndedWithWicket) inn._overEndedWithWicket = true;
+	      setTimeout(() => promptNewBatsman(pendingBatsmanCtx), 320);
   }
 }
 
@@ -1490,6 +1517,7 @@ function openWideModal() {
   `);
 }
 function applyWide(extra) {
+  if (!modalActionSafe()) return;
   closeModal();
   record({ type: 'wide', extraRuns: extra });
 }
@@ -1508,6 +1536,7 @@ function openNoBallModal() {
   `);
 }
 function applyNoBall(batRuns) {
+  if (!modalActionSafe()) return;
   closeModal();
   record({ type: 'noball', runs: batRuns });
 }
@@ -1527,6 +1556,7 @@ function openByeModal(kind) {
   `);
 }
 function applyBye(kind, r) {
+  if (!modalActionSafe()) return;
   closeModal();
   record({ type: kind, runs: r });
 }
@@ -2072,13 +2102,7 @@ function renderLive() {
 
     ${isScorer() ? `
     <div class="keypad mt-3">
-      <button class="key runs-0" onpointerdown="event.preventDefault(); scoreRuns(0)">0</button>
-      <button class="key runs-1" onpointerdown="event.preventDefault(); scoreRuns(1)">1</button>
-      <button class="key runs-2" onpointerdown="event.preventDefault(); scoreRuns(2)">2</button>
-      <button class="key runs-3" onpointerdown="event.preventDefault(); scoreRuns(3)">3</button>
-      <button class="key runs-4" onpointerdown="event.preventDefault(); scoreRuns(4)">4</button>
-      <button class="key runs-6" onpointerdown="event.preventDefault(); scoreRuns(6)">6</button>
-      <button class="key extra" onpointerdown="event.preventDefault(); openWideModal()">Wide</button>
+      <button class="key ..." onpointerup="event.preventDefault(); ..." onclick="event.preventDefault()">...</button>
       <button class="key extra" onpointerdown="event.preventDefault(); openNoBallModal()">No Ball</button>
       <button class="key wicket" onpointerdown="event.preventDefault(); openWicketModal()">Wicket</button>
       <button class="key misc" onpointerdown="event.preventDefault(); openByeModal('bye')">Bye</button>
@@ -2307,6 +2331,7 @@ function doCommonRebalance(commonName, choice, fromModal) {
 
   if (choice === 'both') {
     match.commonPlayer = commonName;
+	
     match.allowCommon = true;
     
     if (!match.teamA.players.includes(commonName)) match.teamA.players.push(commonName);
@@ -2358,12 +2383,14 @@ function doCommonRebalance(commonName, choice, fromModal) {
   }
 
   if (!keepTeam.players.includes(commonName)) keepTeam.players.push(commonName);
+  match.commonPlayer = null;
   match.allowCommon = false;
 
   if (fromModal) closeModal();
   save();
   renderLive();
   if (fromModal) toast(`${commonName} now only in ${keepTeam.name}`);
+}
 
 function finishAndClear() {
   if (!requireScorer('clear match')) return;
@@ -2657,7 +2684,6 @@ function viewHistoryMatch(idx) {
   match = history[idx].full;
   document.querySelector('[data-screen="scorecard"]').click();
 }
-
 /* ---------- INIT ---------- */
 currentUser = loadSession();
 if (currentUser) {
@@ -2679,6 +2705,10 @@ function startLiveSync() {
 
       match = data;
       match.history ||=[];
+	  delete match.inn1._pendingNewBatsman;
+	  delete match.inn1._overEndedWithWicket;
+	  delete match.inn2._pendingNewBatsman;
+	  delete match.inn2._overEndedWithWicket;
 
       // Firebase may remove empty arrays
       if (match.inn1) {
@@ -2695,13 +2725,15 @@ function startLiveSync() {
         match.inn2.bowling ||= [];
       }
 
-      try { renderLive(); } catch(e) {
-        console.error("renderLive", e);
-      }
-
-      try { renderScorecard(); } catch(e) {
-        console.error("renderScorecard", e);
-      }
+      const liveActive = document.getElementById('screen-live')?.classList.contains('active');
+      const scActive = document.getElementById('screen-scorecard')?.classList.contains('active');
+	  try {
+		  if (liveActive) renderLive();
+		  else if (scActive) renderScorecard();
+		  else if (match.status === 'live') renderLive();
+	  } catch (e) {
+		  console.error('live sync render', e);
+	  }
     }
   );
 }
