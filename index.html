@@ -429,6 +429,15 @@ let history = JSON.parse(localStorage.getItem('tejas_history') || '[]');
 let selectedA = new Set();
 let selectedB = new Set();
 
+let hiddenHistoryIds = new Set( JSON.parse(localStorage.getItem('tejas_hidden_history') || '[]'));
+let showHiddenHistory = false;
+function saveHiddenHistory(){
+  try {
+    localStorage.setItem('hidden_history',JSON.stringify([...hiddenHistoryIds]));
+  } catch(e) {
+    console.error('localStorage save failed (tejas_hidden_history):',e);
+  }
+}
 /* ---------- helpers ---------- */
 function save() {
   try {
@@ -2549,23 +2558,50 @@ function renderHistory() {
   }
   // Serial number: newest match is highest number (history is unshifted)
   const total = history.length;
-  el.innerHTML = history.map((h, i) => {
+  const scorer = isScorer();
+  const visibleCount = history.filter(h => !hiddenHistoryIds.has(h.id)).length;
+  const hiddenCount = total - visibleCount;
+
+  const rows = history.map((h, i) => {
+  const isHidden = hiddenHistoryIds.has(h.id);
+  if (isHidden && !(scorer && showHiddenHistory)) return ''; // skip: hidden and not shown
+  const serial = total - i; // Match #1 is oldest, highest is newest
+  const d = new Date(h.date);
+  const dateStr = d.toLocaleDateString(undefined, { day:'2-digit', month:'short', year:'numeric' });
+  const timeStr = d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
+  return `
+
     const serial = total - i; // Match #1 is oldest, highest is newest
     const d = new Date(h.date);
     const dateStr = d.toLocaleDateString(undefined, { day:'2-digit', month:'short', year:'numeric' });
     const timeStr = d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
     return `
-      <div class="match-card mb-2">
+      <div class="match-card mb-2"${isHidden ? ' style="opacity:0.55"' : ''}>
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
           <div style="flex:1" onclick="viewHistoryMatch(${i})">
-            <div class="font-bold">#${serial} · ${h.result || 'Match'}</div>
-            <div class="text-sm text-muted">${h.teamA} ${h.inn1} vs ${h.teamB} ${h.inn2} · ${h.overs} ov</div>
-          </div>
-          <button class="btn btn-sm btn-secondary" style="flex-shrink:0;padding:6px 10px;font-size:0.75rem"
-            onclick="event.stopPropagation();showMatchDateDialog(${i})">${dateStr}</button>
+            <div class="font-bold">#${serial} Â· ${h.result || 'Match'}${isHidden ? ' <span class="text-sm text-muted">(hidden)</span>' : ''}</div>
+            <div class="text-sm text-muted">${h.teamA} ${h.inn1} vs ${h.teamB} ${h.inn2} Â· ${h.overs} ov</div>
+           </div>
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0">
+  				<button class="btn btn-sm btn-secondary" style="padding:6px 10px;font-size:0.75rem"
+  				  onclick="event.stopPropagation();showMatchDateDialog(${i})">${dateStr}</button>
+  				${scorer ? `
+  				  <button class="btn btn-sm btn-secondary" style="padding:6px 10px;font-size:0.75rem"
+  					onclick="event.stopPropagation();${isHidden ? `unhideHistoryEntry('${h.id}')` : `hideHistoryEntry('${h.id}')`}">${isHidden ? 'Unhide' : 'Hide'}</button>
+  				` : ''}
+			    </div>
         </div>
       </div>`;
-  }).join('') + `
+  }).join('');
+  
+  const emptyVisible = !rows && `<div class="empty"><p>No past matches yet.</p></div>`;
+  
+  el.innerHTML = (rows || emptyVisible || '') + `
+    ${scorer && hiddenCount > 0 ? `
+      <button class="btn btn-secondary btn-block mt-2" onclick="toggleShowHiddenHistory()">
+        ${showHiddenHistory ? 'Hide Hidden History' : `Show Hidden History (${hiddenCount})`}
+      </button>
+    ` : ''}
     <button class="btn btn-secondary btn-block mt-3" onclick="if(confirm('Clear all history?')){history=[];save();renderHistory();}">Clear History</button>
   `;
 }
