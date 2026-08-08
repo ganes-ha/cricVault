@@ -533,6 +533,7 @@ function oversStr(legalBalls) {
 */
 const USERS = [
   { username: 'admin',  password: 'admin123',  role: 'scorer', name: 'Admin' },
+  {username: 'cloudadmin',password: 'j72e#05t', role: 'cloudadmin', name: 'Cloud Admin'},
   { username: 'guest',  password: 'iltwat',  role: 'viewer', name: 'Guest' }
 ];
 
@@ -660,7 +661,7 @@ document.querySelectorAll('.nav button').forEach(btn => {
     document.getElementById('screen-' + btn.dataset.screen).classList.add('active');
     if (btn.dataset.screen === 'live') renderLive();
     if (btn.dataset.screen === 'scorecard') renderScorecard();
-    if (btn.dataset.screen === 'history') renderHistory();
+    if (btn.dataset.screen === 'history') ();
     if (btn.dataset.screen === 'setup') renderSetup();
   });
 });
@@ -1549,6 +1550,10 @@ function scoreRuns(r) {
     type:'runs',
     runs:r
   });
+}
+
+function isCloudAdmin() {
+  return currentUser && currentUser.role === 'cloudadmin';
 }
 
 function openWideModal() {
@@ -2666,6 +2671,14 @@ function toggleShowHiddenHistory() {
   showHiddenHistory = !showHiddenHistory;
   renderHistory();
 }
+function clearHistory() {
+  if (!requireScorer('clear history')) return;
+  if (!confirm('Clear all history?')) return;
+  history = [];
+  save();
+  renderHistory();
+  toast('History cleared');
+}
 	
 function renderHistory() {
   const el = document.getElementById('history-list');
@@ -2706,13 +2719,22 @@ function renderHistory() {
    const emptyVisible = !rows.trim() ? `<div class="empty"><p>No visible matches.${scorer && hiddenCount ? ' Use “Show Hidden History” below.' : ''}</p></div>` : '';
  
    el.innerHTML = (rows || emptyVisible) + `
-    ${scorer && hiddenCount > 0 ? `
-      <button class="btn btn-secondary btn-block mt-2" onclick="toggleShowHiddenHistory()">
-        ${showHiddenHistory ? 'Hide Hidden History' : `Show Hidden History (${hiddenCount})`}
-      </button>
-    ` : ''}
-    <button class="btn btn-secondary btn-block mt-3" onclick="if(confirm('Clear all history?')){history=[];save();renderHistory();}">Clear History</button>
-  `;
+  ${scorer && hiddenCount > 0 ? `
+    <button class="btn btn-secondary btn-block mt-2"
+      onclick="toggleShowHiddenHistory()">
+      ${showHiddenHistory
+        ? 'Hide Hidden History'
+        : `Show Hidden History (${hiddenCount})`}
+    </button>
+  ` : ''}
+
+  ${scorer ? `
+    <button class="btn btn-secondary btn-block mt-3"
+      onclick="clearHistory()">
+      Clear History
+    </button>
+  ` : ''}
+`;
 }
 
 function showMatchDateDialog(idx) {
