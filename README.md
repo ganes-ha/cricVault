@@ -8,11 +8,8 @@ Lightweight offline box-cricket scorer (HTML/CSS/JS). Mobile + desktop.
 
 | Username | Password   | Role   | Can do |
 |----------|------------|--------|--------|
-| `admin`  | `admin123` | Scorer | Full access – score, setup, players |
-| `scorer` | `scorer123`| Scorer | Full access – score, setup, players |
-| `hari`   | `hari123`  | Scorer | Full access |
-| `viewer` | `view123`  | Viewer | Live, scorecard, history only |
-| `guest`  | `guest123` | Viewer | Live, scorecard, history only |
+| `admin`  | `***`      | Scorer | Full access – score, setup, players |
+| `guest`  | `***`      | Viewer | Live, scorecard, history only |
 
 - **Scorers** can mark every ball, start matches, add players.
 - **Viewers** only watch (keypad locked). Logout from the header.
