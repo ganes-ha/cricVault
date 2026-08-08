@@ -234,7 +234,7 @@
       </div>
       <div class="card">
         <div class="card-title">Quick Actions</div>
-        <button class="btn btn-secondary btn-block" onclick="resetDefaultPlayers()">Reset to Default 18 Players</button>
+        <button class="btn btn-secondary btn-block" onclick="resetDefaultPlayers()">Reset to Default Squad</button>
         <p class="text-sm text-muted mt-2">No fixed wicket-keeper role — any player can keep or bowl.</p>
       </div>
     </section>
@@ -433,7 +433,7 @@ let hiddenHistoryIds = new Set( JSON.parse(localStorage.getItem('tejas_hidden_hi
 let showHiddenHistory = false;
 function saveHiddenHistory(){
   try {
-    localStorage.setItem('hidden_history',JSON.stringify([...hiddenHistoryIds]));
+    localStorage.setItem('tejas_hidden_history',JSON.stringify([...hiddenHistoryIds]));
   } catch(e) {
     console.error('localStorage save failed (tejas_hidden_history):',e);
   }
@@ -617,7 +617,7 @@ function removePlayer(idx) {
 }
 function resetDefaultPlayers() {
   if (!requireScorer('reset players')) return;
-  if (!confirm('Reset to the original 18 players?')) return;
+  if (!confirm('Reset to the original default squad?')) return;
   players = [...DEFAULT_PLAYERS]; save(); renderPlayers(); toast('Reset done');
 }
 
@@ -1018,7 +1018,7 @@ function record(action) {
   }
   const inn = getCurrentInnings();
   if (inn.isComplete) {
-    toast('Cannot score: Innings is already comeplete.');
+    toast('Cannot score: Innings is already complete.');
     return;
   }
 
@@ -2570,12 +2570,6 @@ function renderHistory() {
   const dateStr = d.toLocaleDateString(undefined, { day:'2-digit', month:'short', year:'numeric' });
   const timeStr = d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
   return `
-
-    const serial = total - i; // Match #1 is oldest, highest is newest
-    const d = new Date(h.date);
-    const dateStr = d.toLocaleDateString(undefined, { day:'2-digit', month:'short', year:'numeric' });
-    const timeStr = d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
-    return `
       <div class="match-card mb-2"${isHidden ? ' style="opacity:0.55"' : ''}>
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
           <div style="flex:1" onclick="viewHistoryMatch(${i})">
