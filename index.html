@@ -417,12 +417,22 @@ let selectedB = new Set();
 
 /* ---------- helpers ---------- */
 function save() {
-  localStorage.setItem('tejas_players', JSON.stringify(players));
-  localStorage.setItem('tejas_match', JSON.stringify(match));
-  localStorage.setItem('tejas_history', JSON.stringify(history));
-
+  try {
+    localStorage.setItem('tejas_players', JSON.stringify(players));
+    if (match) {
+      // don't persist the undo stack (match.history) — it's session-only and bulky
+      const { history: _undo, ...matchForStorage } = match;
+      localStorage.setItem('tejas_match', JSON.stringify(matchForStorage));
+    } else {
+      localStorage.removeItem('tejas_match');
+    }
+    localStorage.setItem('tejas_history', JSON.stringify(history));
+  } catch (e) {
+    console.error('localStorage save failed (quota?):', e); // never let this block rendering
+  }
   saveMatchToCloud();
 }
+
 function toast(msg, ms=2400) {
   const t = document.getElementById('toast');
   t.textContent = msg;
