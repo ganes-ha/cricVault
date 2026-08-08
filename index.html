@@ -610,10 +610,14 @@ function enterApp() {
   document.getElementById('main-app').style.display = '';
   const badge = document.getElementById('user-badge');
   if (badge && currentUser) {
-    badge.innerHTML = `<strong style="color:var(--text)">${currentUser.name}</strong><br>` +
-      (currentUser.role === 'scorer'
-        ? '<span style="color:var(--accent)">Scorer</span>'
-        : '<span style="color:var(--warning)">View only</span>');
+    badge.innerHTML =`<strong>${currentUser.name}</strong><br>` +
+	  (
+	    currentUser.role === 'cloudadmin'
+	      ? '<span style="color:var(--danger)">Cloud Admin</span>'
+	      : currentUser.role === 'scorer'
+	      ? '<span style="color:var(--accent)">Scorer</span>'
+	      : '<span style="color:var(--warning)">View only</span>'
+	  );
   }
   try { applyRoleUI(); } catch (e) { console.error('applyRoleUI', e); }
   try { renderPlayers(); } catch (e) { console.error('renderPlayers', e); }
@@ -2756,6 +2760,13 @@ function renderHistory() {
         : `Show Hidden History (${hiddenCount})`}
     </button>
   ` : ''}
+  
+  ${scorer ? `
+<button class="btn btn-secondary btn-block mt-3"
+        onclick="clearHistory()">
+   Clear Local History
+</button>
+` : ''}
 
   ${isCloudAdmin() ? `
     <button class="btn btn-secondary btn-block mt-3"
