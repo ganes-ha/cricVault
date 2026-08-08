@@ -478,7 +478,7 @@ function matchForPersist(m) {
     delete copy._overEndedWithWicket;
     return copy;
   };
-  return { ...rest, inn1: cleanInn(rest.inn1), inn2: cleanInn(rest.inn2) };
+  return {...rest, lastUpdated: Date.now(), inn1: cleanInn(rest.inn1), inn2: cleanInn(rest.inn2)};
 }
 	
 let _cloudSaveTimer = null;	
