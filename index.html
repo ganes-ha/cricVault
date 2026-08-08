@@ -2133,13 +2133,19 @@ function renderLive() {
 
     ${isScorer() ? `
     <div class="keypad mt-3">
-      <button class="key ..." onpointerup="event.preventDefault(); ..." onclick="event.preventDefault()">...</button>
-      <button class="key extra" onpointerdown="event.preventDefault(); openNoBallModal()">No Ball</button>
-      <button class="key wicket" onpointerdown="event.preventDefault(); openWicketModal()">Wicket</button>
-      <button class="key misc" onpointerdown="event.preventDefault(); openByeModal('bye')">Bye</button>
-      <button class="key misc" onpointerdown="event.preventDefault(); openByeModal('legbye')">LegBye</button>
-      <button class="key undo" onpointerdown="event.preventDefault(); undo()">Undo</button>
-    </div>
+	  <button class="key runs-0" onpointerup="event.preventDefault(); scoreRuns(0)" onclick="event.preventDefault()">0</button>
+	  <button class="key runs-1" onpointerup="event.preventDefault(); scoreRuns(1)" onclick="event.preventDefault()">1</button>
+	  <button class="key runs-2" onpointerup="event.preventDefault(); scoreRuns(2)" onclick="event.preventDefault()">2</button>
+	  <button class="key runs-3" onpointerup="event.preventDefault(); scoreRuns(3)" onclick="event.preventDefault()">3</button>
+	  <button class="key runs-4" onpointerup="event.preventDefault(); scoreRuns(4)" onclick="event.preventDefault()">4</button>
+	  <button class="key runs-6" onpointerup="event.preventDefault(); scoreRuns(6)" onclick="event.preventDefault()">6</button>
+	  <button class="key extra" onpointerup="event.preventDefault(); openWideModal()" onclick="event.preventDefault()">Wide</button>
+	  <button class="key extra" onpointerup="event.preventDefault(); openNoBallModal()" onclick="event.preventDefault()">No Ball</button>
+	  <button class="key wicket" onpointerup="event.preventDefault(); openWicketModal()" onclick="event.preventDefault()">Wicket</button>
+	  <button class="key misc" onpointerup="event.preventDefault(); openByeModal('bye')" onclick="event.preventDefault()">Bye</button>
+	  <button class="key misc" onpointerup="event.preventDefault(); openByeModal('legbye')" onclick="event.preventDefault()">LegBye</button>
+	  <button class="key undo" onpointerup="event.preventDefault(); undo()" onclick="event.preventDefault()">Undo</button>
+	</div>
     ` : `
     <div class="card mt-3" style="text-align:center;padding:16px;border-style:dashed">
       <div class="text-sm text-muted">👁 View only — scoring is locked</div>
