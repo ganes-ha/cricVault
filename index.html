@@ -1106,6 +1106,7 @@ function record(action) {
   if (action.type === 'runs') {
     const r = action.runs;
     striker.runs += r;
+	striker.balls += 1;
     if (r === 4) striker.fours++;
     if (r === 6) striker.sixes++;
     bowler.runs += r;
