@@ -1002,7 +1002,7 @@ function record(action) {
       isFreeHit: boolean
     }
   */
-  if (!match || match.status !== 'live {
+  if (!match || match.status !== 'live') {
       toast('Cannot score: Match is not live.');
       return;
   }
@@ -1418,7 +1418,7 @@ function scoreRuns(r) {
   record({ type: 'runs', runs: r });
 
   //Unlock the UI after 150ms(fast enough for rapid scoring, slow enough to protect the UI)
-  setTimeout() => {
+  setTimeout(() => {
     isScoring = false;
   },150);
 }
