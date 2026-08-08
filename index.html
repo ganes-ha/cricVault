@@ -1002,9 +1002,15 @@ function record(action) {
       isFreeHit: boolean
     }
   */
-  if (!match || match.status !== 'live') return;
+  if (!match || match.status !== 'live {
+      toast('Cannot score: Match is not live.');
+      return;
+  }
   const inn = getCurrentInnings();
-  if (inn.isComplete) return;
+  if (inn.isComplete) {
+    toast('Cannot score: Innings is already comeplete.');
+    return;
+  }
 
   pushHistory();
 
@@ -1403,9 +1409,18 @@ function confirmNewBatsman(outWasStriker, onLastBallOfOver) {
 }
 
 /* ---------- UI helpers that call record() ---------- */
+let isScoring = false;
 function scoreRuns(r) {
   if (!requireScorer('score')) return;
+  if(isScoring) return; //Prevent overlapping taps
+
+  isScoring = true;
   record({ type: 'runs', runs: r });
+
+  //Unlock the UI after 150ms(fast enough for rapid scoring, slow enough to protect the UI)
+  setTimeout() => {
+    isScoring = false;
+  },150);
 }
 
 function openWideModal() {
@@ -2024,18 +2039,18 @@ function renderLive() {
 
     ${isScorer() ? `
     <div class="keypad mt-3">
-      <button class="key runs-0" onclick="scoreRuns(0)">0</button>
-      <button class="key runs-1" onclick="scoreRuns(1)">1</button>
-      <button class="key runs-2" onclick="scoreRuns(2)">2</button>
-      <button class="key runs-3" onclick="scoreRuns(3)">3</button>
-      <button class="key runs-4" onclick="scoreRuns(4)">4</button>
-      <button class="key runs-6" onclick="scoreRuns(6)">6</button>
-      <button class="key extra" onclick="openWideModal()">Wide</button>
-      <button class="key extra" onclick="openNoBallModal()">No Ball</button>
-      <button class="key wicket" onclick="openWicketModal()">Wicket</button>
-      <button class="key misc" onclick="openByeModal('bye')">Bye</button>
-      <button class="key misc" onclick="openByeModal('legbye')">LegBye</button>
-      <button class="key undo" onclick="undo()">Undo</button>
+      <button class="key runs-0" onpointerdown="event.preventDefault(); scoreRuns(0)">0</button>
+      <button class="key runs-1" onpointerdown="event.preventDefault(); scoreRuns(1)">1</button>
+      <button class="key runs-2" onpointerdown="event.preventDefault(); scoreRuns(2)">2</button>
+      <button class="key runs-3" onpointerdown="event.preventDefault(); scoreRuns(3)">3</button>
+      <button class="key runs-4" onpointerdown="event.preventDefault(); scoreRuns(4)">4</button>
+      <button class="key runs-6" onpointerdown="event.preventDefault(); scoreRuns(6)">6</button>
+      <button class="key extra" onpointerdown="event.preventDefault(); openWideModal()">Wide</button>
+      <button class="key extra" onpointerdown="event.preventDefault(); openNoBallModal()">No Ball</button>
+      <button class="key wicket" onpointerdown="event.preventDefault(); openWicketModal()">Wicket</button>
+      <button class="key misc" onpointerdown="event.preventDefault(); openByeModal('bye')">Bye</button>
+      <button class="key misc" onpointerdown="event.preventDefault(); openByeModal('legbye')">LegBye</button>
+      <button class="key undo" onpointerdown="event.preventDefault(); undo()">Undo</button>
     </div>
     ` : `
     <div class="card mt-3" style="text-align:center;padding:16px;border-style:dashed">
