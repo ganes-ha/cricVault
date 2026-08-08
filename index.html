@@ -402,6 +402,14 @@ async function saveMatchToCloud() {
     match
   );
 }
+async function saveMatchHistoryToCloud(entry) {
+  if (!window.firebaseDb) return;
+  try {
+    await firebaseSet(firebaseRef(firebaseDb, "matchHistory/" + entry.id), entry);
+  } catch (e) {
+    console.error('saveMatchHistoryToCloud failed:', e);
+  }
+}
 
 const DEFAULT_PLAYERS = [
   "Anjaneya","Balakrishnan","Muthu","Hari","Ganesha","Sathish",
