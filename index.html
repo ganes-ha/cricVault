@@ -1418,9 +1418,7 @@ function scoreRuns(r) {
   record({ type: 'runs', runs: r });
 
   //Unlock the UI after 150ms(fast enough for rapid scoring, slow enough to protect the UI)
-  setTimeout(() => {
-    isScoring = false;
-  },150);
+  setTimeout(() => { isScoring = false; },150);
 }
 
 function openWideModal() {
