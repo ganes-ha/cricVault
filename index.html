@@ -424,13 +424,28 @@ const DEFAULT_PLAYERS = [
   "Pridivi","SriRam","Nitheesh"
 ];
 
-let players = JSON.parse(localStorage.getItem('tejas_players') || 'null') || [...DEFAULT_PLAYERS];
-let match  = JSON.parse(localStorage.getItem('tejas_match')  || 'null');
-let history = JSON.parse(localStorage.getItem('tejas_history') || '[]');
+/** Safe localStorage JSON read — never let corrupt data kill the whole script (breaks login) */
+function safeJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw == null || raw === '') return fallback;
+    return JSON.parse(raw);
+  } catch (e) {
+    console.warn('Bad localStorage for', key, e);
+    try { localStorage.removeItem(key); } catch (_) {}
+    return fallback;
+  }
+}
+
+let players = safeJSON('tejas_players', null) || [...DEFAULT_PLAYERS];
+if (!Array.isArray(players)) players = [...DEFAULT_PLAYERS];
+let match  = safeJSON('tejas_match', null);
+let history = safeJSON('tejas_history', []);
+if (!Array.isArray(history)) history = [];
 let selectedA = new Set();
 let selectedB = new Set();
 
-let hiddenHistoryIds = new Set( JSON.parse(localStorage.getItem('tejas_hidden_history') || '[]').map(String));
+let hiddenHistoryIds = new Set((safeJSON('tejas_hidden_history', []) || []).map(String));
 let showHiddenHistory = false;
 function saveHiddenHistory() {
   try {
@@ -537,20 +552,31 @@ function clearSession() {
 }
 
 function doLogin() {
-  const user = (document.getElementById('login-user').value || '').trim().toLowerCase();
-  const pass = document.getElementById('login-pass').value || '';
-  const err = document.getElementById('login-error');
-  const found = USERS.find(u => u.username === user && u.password === pass);
-  if (!found) {
-    err.style.display = 'block';
-    err.textContent = 'Invalid username or password';
-    return;
-  }
-  currentUser = found;
-  saveSession(found);
-  err.style.display = 'none';
-  enterApp();
-  toast(`Welcome, ${found.name} (${found.role})`);
+  try {
+   const user = (document.getElementById('login-user').value || '').trim().toLowerCase();
+   const pass = document.getElementById('login-pass').value || '';
+   const err = document.getElementById('login-error');
+   if (err) { err.style.display = 'none'; err.textContent = ''; }
+   const found = USERS.find(u => u.username === user && u.password === pass);
+   if (!found) {
+     if (err) {
+       err.style.display = 'block';
+       err.textContent = 'Invalid username or password';
+     }
+     return;
+   }
+   currentUser = found;
+   saveSession(found);
+   enterApp();
+   try { toast(`Welcome, ${found.name} (${found.role})`); } catch (_) {}
+   } catch (e) {
+   console.error('doLogin failed', e);
+   const err = document.getElementById('login-error');
+   if (err) {
+     err.style.display = 'block';
+     err.textContent = 'Login error — try clearing site data or refresh';
+   }
+ }
 }
 
 function doLogout() {
@@ -565,7 +591,7 @@ function doLogout() {
 
 function enterApp() {
   document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('main-app').style.display = 'block';
+  document.getElementById('main-app').style.display = '';
   const badge = document.getElementById('user-badge');
   if (badge && currentUser) {
     badge.innerHTML = `<strong style="color:var(--text)">${currentUser.name}</strong><br>` +
@@ -573,14 +599,19 @@ function enterApp() {
         ? '<span style="color:var(--accent)">Scorer</span>'
         : '<span style="color:var(--warning)">View only</span>');
   }
-  applyRoleUI();
-  renderPlayers();
-  if (match && match.status === 'live') {
-    document.querySelector('[data-screen="live"]').click();
-  } else {
-    document.querySelector('[data-screen="scorecard"]').click();
-  }
+  try { applyRoleUI(); } catch (e) { console.error('applyRoleUI', e); }
+  try { renderPlayers(); } catch (e) { console.error('renderPlayers', e); }
+  try {
+    if (match && match.status === 'live') {
+      document.querySelector('[data-screen="live"]')?.click();
+    } else {
+      document.querySelector('[data-screen="scorecard"]')?.click();
+    }
+  } catch (e) { console.error('enterApp nav', e); }
 }
+
+window.doLogin = doLogin;
+window.doLogout = doLogout;
 
 function requireScorer(actionName) {
   if (isScorer()) return true;
@@ -2705,17 +2736,15 @@ function startLiveSync() {
 
       match = data;
       match.history ||=[];
-	  delete match.inn1._pendingNewBatsman;
-	  delete match.inn1._overEndedWithWicket;
-	  delete match.inn2._pendingNewBatsman;
-	  delete match.inn2._overEndedWithWicket;
 
-      // Firebase may remove empty arrays
+      // Firebase may remove empty arrays; drop stale session-only flags safely
       if (match.inn1) {
         match.inn1.currentOver ||= [];
         match.inn1.fallOfWickets ||= [];
         match.inn1.batting ||= [];
         match.inn1.bowling ||= [];
+		delete match.inn1._pendingNewBatsman;
+        delete match.inn1._overEndedWithWicket;
       }
 
       if (match.inn2) {
@@ -2723,6 +2752,8 @@ function startLiveSync() {
         match.inn2.fallOfWickets ||= [];
         match.inn2.batting ||= [];
         match.inn2.bowling ||= [];
+		delete match.inn1._pendingNewBatsman;
+        delete match.inn1._overEndedWithWicket;
       }
 
       const liveActive = document.getElementById('screen-live')?.classList.contains('active');
@@ -2732,7 +2763,7 @@ function startLiveSync() {
 		  else if (scActive) renderScorecard();
 		  else if (match.status === 'live') renderLive();
 	  } catch (e) {
-		  console.error('live sync render', e);
+     	  console.error('live sync render', e);
 	  }
     }
   );
