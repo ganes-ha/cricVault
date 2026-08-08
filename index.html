@@ -2611,9 +2611,37 @@ function startLiveSync() {
       }
     }
   );
-}
 
+function startHistorySync() {
+  if (!window.firebaseDb) return;
+  firebaseOnValue(
+    firebaseRef(firebaseDb, "matchHistory"),
+    (snapshot) => {
+      const raw = snapshot.val();
+      if (!raw) return;
+      const remoteEntries = Object.values(raw).filter(Boolean);
+      const localIds = new Set(history.map(h => h.id));
+      let changed = false;
+      remoteEntries.forEach(entry => {
+        if (!localIds.has(entry.id)) {
+          history.push(entry);
+          localIds.add(entry.id);
+          changed = true;
+        }
+      });
+      if (changed) {
+        history.sort((a, b) => new Date(b.date) - new Date(a.date));
+        if (history.length > 30) history = history.slice(0, 30);
+        try { localStorage.setItem('tejas_history', JSON.stringify(history)); } catch (e) {}
+        const histScreen = document.getElementById('screen-history');
+        if (histScreen && histScreen.classList.contains('active')) renderHistory();
+      }
+    }
+  );
+}
+  
 window.addEventListener('load', () => {
+  setTimeout(startHistorySync, 1000);
   if (!isScorer()) {
     setTimeout(startLiveSync, 1000);
   }
